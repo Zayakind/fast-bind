@@ -14,6 +14,8 @@ pub struct Note {
     pub content: String,             // Содержимое заметки
     pub created_at: DateTime<Utc>,   // Время создания
     pub updated_at: DateTime<Utc>,   // Время последнего обновления
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 // Структура для управления заметками
@@ -62,10 +64,12 @@ impl NotesManager {
             let path = entry.path();
             
             if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(note) = serde_json::from_str::<Note>(&content) {
-                        notes.push(note);
-                    }
+                match fs::read_to_string(&path) {
+                    Ok(content) => match serde_json::from_str::<Note>(&content) {
+                        Ok(note) => notes.push(note),
+                        Err(e) => eprintln!("Ошибка десериализации заметки {:?}: {}", path, e),
+                    },
+                    Err(e) => eprintln!("Ошибка чтения файла заметки {:?}: {}", path, e),
                 }
             }
         }
@@ -98,6 +102,7 @@ pub fn create_note(title: String, content: String) -> Result<Note, AppError> {
         content,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        pinned: false,
     };
     Ok(note)
 }

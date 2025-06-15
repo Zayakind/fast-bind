@@ -4,6 +4,8 @@ use crate::error::AppError;
 use std::path::PathBuf;
 use uuid::Uuid;
 use clipboard::{ClipboardContext, ClipboardProvider};
+use std::fs;
+use serde_json;
 
 pub struct App {
     notes: Vec<Note>,
@@ -12,6 +14,7 @@ pub struct App {
     new_note_content: String,
     notes_manager: NotesManager,
     right_panel_width: f32, // ширина правой панели
+    editing_title: Option<usize>, // индекс редактируемого заголовка
 }
 
 impl App {
@@ -26,9 +29,11 @@ impl App {
         
         // Загружаем существующие заметки
         let notes = notes_manager.get_all_notes().unwrap_or_default();
+        let mut notes = notes;
+        notes.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(b.created_at.cmp(&a.created_at)));
         
         let default_window_width = 1024.0;
-        let left_panel_width = (default_window_width * 0.20_f32).round();
+        let left_panel_width = (default_window_width * 0.20) as f32;
         Self {
             notes,
             selected_note: None,
@@ -36,6 +41,7 @@ impl App {
             new_note_content: String::new(),
             notes_manager,
             right_panel_width: left_panel_width,
+            editing_title: None,
         }
     }
     
@@ -47,10 +53,12 @@ impl App {
                 content: self.new_note_content.clone(),
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
+                pinned: false,
             };
             
             if let Ok(()) = self.notes_manager.save_note(&note) {
                 self.notes.push(note);
+                self.notes.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(b.created_at.cmp(&a.created_at)));
                 self.new_note_title.clear();
                 self.new_note_content.clear();
             }
@@ -63,6 +71,7 @@ impl App {
                 let note_id = self.notes[idx].id;
                 if let Ok(()) = self.notes_manager.delete_note(note_id) {
                     self.notes.remove(idx);
+                    self.notes.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(b.created_at.cmp(&a.created_at)));
                     self.selected_note = None;
                 }
             }
@@ -89,10 +98,12 @@ impl App {
                     content: self.new_note_content.clone(),
                     created_at: old_note.created_at,
                     updated_at: chrono::Utc::now(),
+                    pinned: old_note.pinned,
                 };
                 
                 if let Ok(()) = self.notes_manager.save_note(&updated_note) {
                     self.notes[idx] = updated_note;
+                    self.notes.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(b.created_at.cmp(&a.created_at)));
                 }
             }
         }
@@ -128,9 +139,14 @@ impl eframe::App for App {
                     egui::ScrollArea::vertical().max_height(400.0).show(ui, |ui| {
                         for (idx, note) in self.notes.iter().enumerate() {
                             let is_selected = self.selected_note == Some(idx);
+                            let mut title = String::new();
+                            if note.pinned {
+                                title.push_str("📌");
+                            }
+                            title.push_str(&note.title);
                             if ui.add_sized([
                                 left_width - 20.0, 28.0],
-                                egui::SelectableLabel::new(is_selected, &note.title)
+                                egui::SelectableLabel::new(is_selected, title)
                             ).clicked() {
                                 self.selected_note = Some(idx);
                                 self.new_note_title = note.title.clone();
@@ -184,6 +200,54 @@ impl eframe::App for App {
                     ui.set_width(right_width.max(220.0));
                     if let Some(idx) = self.selected_note {
                         if idx < self.notes.len() {
+                            ui.add_space(6.0);
+                            // Заголовок заметки с иконкой ✏️ для редактирования
+                            ui.horizontal(|ui| {
+                                // Кнопка закрепить/открепить
+                                let pin_icon = if self.notes[idx].pinned { "📌" } else { "📍" };
+                                if ui.add(egui::Label::new(pin_icon).sense(egui::Sense::click())).on_hover_text(if self.notes[idx].pinned { "Открепить" } else { "Закрепить" }).clicked() {
+                                    self.notes[idx].pinned = !self.notes[idx].pinned;
+                                    let note = &self.notes[idx];
+                                    let _ = self.notes_manager.save_note(note);
+                                    // После изменения pinned пересортировать список
+                                    self.notes.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(b.created_at.cmp(&a.created_at)));
+                                }
+                                if self.editing_title == Some(idx) {
+                                    let mut title = self.notes[idx].title.clone();
+                                    let response = ui.add_sized([
+                                        ui.available_width() - 36.0, 32.0],
+                                        egui::TextEdit::singleline(&mut title)
+                                            .hint_text("Заголовок заметки")
+                                            .frame(false)
+                                    );
+                                    if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) || response.lost_focus() && !response.has_focus() {
+                                        if !title.trim().is_empty() {
+                                            self.notes[idx].title = title.clone();
+                                            // Сохраняем заметку с новым заголовком
+                                            let note = &self.notes[idx];
+                                            let _ = self.notes_manager.save_note(note);
+                                        }
+                                        self.editing_title = None;
+                                    }
+                                    if ui.add(egui::Button::new("✔️")).on_hover_text("Сохранить").clicked() {
+                                        if !title.trim().is_empty() {
+                                            self.notes[idx].title = title.clone();
+                                            let note = &self.notes[idx];
+                                            let _ = self.notes_manager.save_note(note);
+                                        }
+                                        self.editing_title = None;
+                                    }
+                                } else {
+                                    ui.label(
+                                        egui::RichText::new(&self.notes[idx].title)
+                                            .size(20.0)
+                                            .strong()
+                                    );
+                                    if ui.add(egui::Label::new("📝").sense(egui::Sense::click())).on_hover_text("Редактировать заголовок").clicked() {
+                                        self.editing_title = Some(idx);
+                                    }
+                                }
+                            });
                             ui.add_space(6.0);
                             // Поле для редактирования содержимого с лёгкой рамкой
                             egui::Frame::none()
