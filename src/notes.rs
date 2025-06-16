@@ -6,6 +6,15 @@ use uuid::Uuid;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use crate::error::AppError;
 
+// Структура, представляющая группу заметок
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteGroup {
+    pub id: Uuid,
+    pub name: String,
+    #[serde(default)]
+    pub collapsed: bool,
+}
+
 // Структура, представляющая заметку
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
@@ -16,6 +25,8 @@ pub struct Note {
     pub updated_at: DateTime<Utc>,   // Время последнего обновления
     #[serde(default)]
     pub pinned: bool,
+    #[serde(default)]
+    pub group_id: Option<Uuid>,
 }
 
 // Структура для управления заметками
@@ -90,6 +101,23 @@ impl NotesManager {
             Err(AppError::Note("Заметка не найдена".into()))
         }
     }
+
+    pub fn save_groups(&self, groups: &Vec<NoteGroup>) -> Result<(), AppError> {
+        let file_path = self.notes_dir.join("groups.json");
+        let content = serde_json::to_string_pretty(groups)?;
+        fs::write(file_path, content)?;
+        Ok(())
+    }
+
+    pub fn load_groups(&self) -> Result<Vec<NoteGroup>, AppError> {
+        let file_path = self.notes_dir.join("groups.json");
+        if !file_path.exists() {
+            return Ok(vec![]);
+        }
+        let content = fs::read_to_string(file_path)?;
+        let groups: Vec<NoteGroup> = serde_json::from_str(&content)?;
+        Ok(groups)
+    }
 }
 
 // Функции для работы с заметками (публичный API)
@@ -103,6 +131,7 @@ pub fn create_note(title: String, content: String) -> Result<Note, AppError> {
         created_at: Utc::now(),
         updated_at: Utc::now(),
         pinned: false,
+        group_id: None,
     };
     Ok(note)
 }

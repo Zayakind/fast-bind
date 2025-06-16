@@ -1,20 +1,21 @@
 use eframe::egui;
-use crate::notes::{Note, NotesManager};
-use crate::error::AppError;
+use crate::notes::{Note, NotesManager, NoteGroup};
 use std::path::PathBuf;
 use uuid::Uuid;
 use clipboard::{ClipboardContext, ClipboardProvider};
-use std::fs;
-use serde_json;
 
 pub struct App {
     notes: Vec<Note>,
+    groups: Vec<NoteGroup>,
     selected_note: Option<usize>,
     new_note_title: String,
     new_note_content: String,
     notes_manager: NotesManager,
     right_panel_width: f32, // ширина правой панели
     editing_title: Option<usize>, // индекс редактируемого заголовка
+    new_group_name: String, // для создания группы
+    show_group_creation: bool,
+    group_creation_selected_notes: Vec<Uuid>, // id выбранных заметок
 }
 
 impl App {
@@ -22,7 +23,7 @@ impl App {
         // Создаем директорию для заметок в домашней директории пользователя
         let notes_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join(".mimir")
+            .join(".notes")
             .join("notes");
         
         let notes_manager = NotesManager::new(notes_dir);
@@ -32,16 +33,22 @@ impl App {
         let mut notes = notes;
         notes.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(b.created_at.cmp(&a.created_at)));
         
+        let groups = notes_manager.load_groups().unwrap_or_default();
+        
         let default_window_width = 1024.0;
         let left_panel_width = (default_window_width * 0.20) as f32;
         Self {
             notes,
+            groups,
             selected_note: None,
             new_note_title: String::new(),
             new_note_content: String::new(),
             notes_manager,
             right_panel_width: left_panel_width,
             editing_title: None,
+            new_group_name: String::new(),
+            show_group_creation: false,
+            group_creation_selected_notes: Vec::new(),
         }
     }
     
@@ -54,6 +61,7 @@ impl App {
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
                 pinned: false,
+                group_id: None,
             };
             
             if let Ok(()) = self.notes_manager.save_note(&note) {
@@ -99,6 +107,7 @@ impl App {
                     created_at: old_note.created_at,
                     updated_at: chrono::Utc::now(),
                     pinned: old_note.pinned,
+                    group_id: old_note.group_id,
                 };
                 
                 if let Ok(()) = self.notes_manager.save_note(&updated_note) {
@@ -108,73 +117,118 @@ impl App {
             }
         }
     }
+    
+    fn set_note_group(&mut self, note_idx: usize, group_id: Option<Uuid>) {
+        if note_idx < self.notes.len() {
+            self.notes[note_idx].group_id = group_id;
+            let _ = self.notes_manager.save_note(&self.notes[note_idx]);
+        }
+    }
+    
+    fn toggle_group_collapsed(&mut self, group_id: Uuid) {
+        if let Some(group) = self.groups.iter_mut().find(|g| g.id == group_id) {
+            group.collapsed = !group.collapsed;
+            let _ = self.notes_manager.save_groups(&self.groups);
+        }
+    }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::SidePanel::left("notes_panel")
+            .frame(egui::Frame {
+                stroke: egui::Stroke::new(0.0, egui::Color32::TRANSPARENT),
+                ..egui::Frame::side_top_panel(&egui::Style::default())
+            })
+            .resizable(false)
+            .min_width(self.right_panel_width)
+            .max_width(self.right_panel_width)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .show(ui, |ui| {
+                        ui.add_space(10.0);
+                        ui.heading(format!("Заметки ({})", self.notes.len()));
+                        ui.add_space(10.0);
+                        if ui.add_sized([self.right_panel_width - 12.0, 32.0], egui::Button::new("+ Новая заметка")).clicked() {
+                            self.selected_note = None;
+                            self.new_note_title.clear();
+                            self.new_note_content.clear();
+                        }
+                        ui.add_space(6.0);
+                        if ui.add_sized([self.right_panel_width - 12.0, 32.0], egui::Button::new("Создать группу")).clicked() {
+                            self.show_group_creation = true;
+                            self.new_group_name.clear();
+                            self.group_creation_selected_notes.clear();
+                        }
+                        ui.add_space(10.0);
+
+                        // --- Группы ---
+                        let mut toggled_group: Option<Uuid> = None;
+                        for group in &mut self.groups {
+                            let group_id = group.id;
+                            let group_name = &group.name;
+                            let collapsed = group.collapsed;
+                            let note_indices: Vec<usize> = self.notes.iter().enumerate()
+                                .filter(|(_, n)| n.group_id == Some(group_id))
+                                .map(|(i, _)| i)
+                                .collect();
+                            let header = egui::CollapsingHeader::new(group_name)
+                                .id_salt(group_id)
+                                .default_open(!collapsed)
+                                .show(ui, |ui| {
+                                    for idx in note_indices {
+                                        let note = &self.notes[idx];
+                                        let is_selected = self.selected_note == Some(idx);
+                                        let mut title = String::new();
+                                        if note.pinned { title.push_str("📌 "); }
+                                        title.push_str(&note.title);
+                                        if ui.add_sized([self.right_panel_width - 20.0, 28.0], egui::SelectableLabel::new(is_selected, title)).clicked() {
+                                            self.selected_note = Some(idx);
+                                            self.new_note_title = note.title.clone();
+                                            self.new_note_content = note.content.clone();
+                                        }
+                                        ui.add_space(4.0);
+                                    }
+                                });
+                            if header.header_response.clicked() {
+                                toggled_group = Some(group_id);
+                            }
+                        }
+                        if let Some(group_id) = toggled_group {
+                            self.toggle_group_collapsed(group_id);
+                        }
+
+                        // --- Заметки без группы ---
+                        let no_group_notes: Vec<_> = self.notes.iter().enumerate().filter(|(_, n)| n.group_id.is_none()).collect();
+                        if !no_group_notes.is_empty() {
+                            egui::CollapsingHeader::new("Без группы")
+                                .default_open(true)
+                                .show(ui, |ui| {
+                                    for (idx, note) in no_group_notes {
+                                        let is_selected = self.selected_note == Some(idx);
+                                        let mut title = String::new();
+                                        if note.pinned { title.push_str("📌 "); }
+                                        title.push_str(&note.title);
+                                        if ui.add_sized([self.right_panel_width - 20.0, 28.0], egui::SelectableLabel::new(is_selected, title)).clicked() {
+                                            self.selected_note = Some(idx);
+                                            self.new_note_title = note.title.clone();
+                                            self.new_note_content = note.content.clone();
+                                        }
+                                        ui.add_space(4.0);
+                                    }
+                                });
+                        }
+                    });
+            });
+
+        egui::CentralPanel::default()
+        .show(ctx, |ui| {
             let splitter_width = 6.0;
-            let min_left_width = 160.0;
-            let max_left_width = 400.0;
             let available_width = ui.available_width();
-            let available_height = ui.available_height();
             let left_width = self.right_panel_width;
             let right_width = available_width - left_width - splitter_width - 48.0; // 48px под колонку кнопок
 
             ui.horizontal(|ui| {
-                // Левая панель (заметки)
-                ui.vertical(|ui| {
-                    ui.set_width(left_width);
-                    ui.add_space(10.0);
-                    ui.heading("Заметки");
-                    ui.add_space(10.0);
-                    if ui.add_sized([left_width - 20.0, 32.0], egui::Button::new("+ Новая заметка")).clicked() {
-                        self.selected_note = None;
-                        self.new_note_title.clear();
-                        self.new_note_content.clear();
-                    }
-                    ui.add_space(10.0);
-                    ui.separator();
-                    ui.add_space(10.0);
-                    egui::ScrollArea::vertical().max_height(400.0).show(ui, |ui| {
-                        for (idx, note) in self.notes.iter().enumerate() {
-                            let is_selected = self.selected_note == Some(idx);
-                            let mut title = String::new();
-                            if note.pinned {
-                                title.push_str("📌");
-                            }
-                            title.push_str(&note.title);
-                            if ui.add_sized([
-                                left_width - 20.0, 28.0],
-                                egui::SelectableLabel::new(is_selected, title)
-                            ).clicked() {
-                                self.selected_note = Some(idx);
-                                self.new_note_title = note.title.clone();
-                                self.new_note_content = note.content.clone();
-                            }
-                            ui.add_space(4.0);
-                        }
-                    });
-                });
-
-                // Разделитель
-                let splitter_rect = egui::Rect::from_min_size(
-                    egui::pos2(ui.min_rect().left() + left_width, ui.min_rect().top()),
-                    egui::vec2(splitter_width, available_height),
-                );
-                let splitter_response = ui.interact(splitter_rect, ui.id().with("splitter"), egui::Sense::click_and_drag());
-                let splitter_color = if splitter_response.is_pointer_button_down_on() {
-                    egui::Color32::LIGHT_GRAY
-                } else {
-                    egui::Color32::DARK_GRAY
-                };
-                ui.painter().rect_filled(splitter_rect, 0.0, splitter_color);
-                if splitter_response.dragged() {
-                    let delta = splitter_response.drag_delta().x;
-                    self.right_panel_width = (left_width + delta)
-                        .clamp(min_left_width, max_left_width);
-                }
-
                 // Колонка с кнопками между разделителем и текстом заметки
                 if let Some(idx) = self.selected_note {
                     if idx < self.notes.len() {
@@ -250,30 +304,50 @@ impl eframe::App for App {
                             });
                             ui.add_space(6.0);
                             // Поле для редактирования содержимого с лёгкой рамкой
-                            egui::Frame::none()
+                            egui::Frame::new()
                                 .stroke(egui::Stroke::new(0.7, egui::Color32::GRAY))
-                                .rounding(egui::Rounding::same(6.0))
-                                .inner_margin(egui::Margin::same(6.0))
+                                .corner_radius(6)
+                                .inner_margin(egui::Margin::same(6))
                                 .show(ui, |ui| {
                                     let mut content = self.new_note_content.clone();
                                     let text_edit = egui::TextEdit::multiline(&mut content)
                                         .hint_text("Текст заметки...")
                                         .desired_rows(8)
-                                        .frame(false)
-                                        .code_editor();
+                                        .frame(false);
                                     if ui.add_sized([ui.available_width(), 120.0], text_edit).changed() {
                                         self.new_note_content = content;
                                         self.save_note_changes();
                                     }
                                 });
+
+                            // ComboBox для выбора группы
+                            ui.horizontal(|ui| {
+                                ui.label("Группа:");
+                                let mut new_group_id: Option<Option<Uuid>> = None;
+                                egui::ComboBox::from_id_salt("group_select")
+                                    .selected_text(self.groups.iter().find(|g| Some(g.id) == self.notes[idx].group_id).map(|g| g.name.as_str()).unwrap_or("Без группы"))
+                                    .show_ui(ui, |ui| {
+                                        if ui.selectable_label(self.notes[idx].group_id.is_none(), "Без группы").clicked() {
+                                            new_group_id = Some(None);
+                                        }
+                                        for group in &self.groups {
+                                            if ui.selectable_label(self.notes[idx].group_id == Some(group.id), &group.name).clicked() {
+                                                new_group_id = Some(Some(group.id));
+                                            }
+                                        }
+                                    });
+                                if let Some(gid) = new_group_id {
+                                    self.set_note_group(idx, gid);
+                                }
+                            });
                         }
                     } else {
                         // Все элементы формы создания заметки располагаем вертикально, фон убран, только лёгкая рамка
                         ui.vertical(|ui| {
-                            egui::Frame::none()
+                            egui::Frame::new()
                                 .stroke(egui::Stroke::new(0.7, egui::Color32::GRAY))
-                                .rounding(egui::Rounding::same(6.0))
-                                .inner_margin(egui::Margin::same(6.0))
+                                .corner_radius(6)
+                                .inner_margin(egui::Margin::same(6))
                                 .show(ui, |ui| {
                                     ui.add_sized([
                                         ui.available_width(), 28.0],
@@ -283,10 +357,10 @@ impl eframe::App for App {
                                     );
                                 });
                             ui.add_space(10.0);
-                            egui::Frame::none()
+                            egui::Frame::new()
                                 .stroke(egui::Stroke::new(0.7, egui::Color32::GRAY))
-                                .rounding(egui::Rounding::same(6.0))
-                                .inner_margin(egui::Margin::same(6.0))
+                                .corner_radius(6)
+                                .inner_margin(egui::Margin::same(6))
                                 .show(ui, |ui| {
                                     ui.add_sized([
                                         ui.available_width(), 80.0],
@@ -306,5 +380,48 @@ impl eframe::App for App {
                 });
             });
         });
+
+        if self.show_group_creation {
+            egui::Window::new("Создать группу")
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.label("Имя группы:");
+                    ui.text_edit_singleline(&mut self.new_group_name);
+                    ui.separator();
+                    ui.label("Добавить заметки в группу:");
+                    for note in &self.notes {
+                        let mut checked = self.group_creation_selected_notes.contains(&note.id);
+                        if ui.checkbox(&mut checked, &note.title).changed() {
+                            if checked {
+                                self.group_creation_selected_notes.push(note.id);
+                            } else {
+                                self.group_creation_selected_notes.retain(|id| id != &note.id);
+                            }
+                        }
+                    }
+                    ui.separator();
+                    if ui.button("Создать").clicked() && !self.new_group_name.trim().is_empty() {
+                        let group = NoteGroup {
+                            id: Uuid::new_v4(),
+                            name: self.new_group_name.trim().to_string(),
+                            collapsed: false,
+                        };
+                        let group_id = group.id;
+                        self.groups.push(group);
+                        for note in &mut self.notes {
+                            if self.group_creation_selected_notes.contains(&note.id) {
+                                note.group_id = Some(group_id);
+                                let _ = self.notes_manager.save_note(note);
+                            }
+                        }
+                        let _ = self.notes_manager.save_groups(&self.groups);
+                        self.show_group_creation = false;
+                    }
+                    if ui.button("Отмена").clicked() {
+                        self.show_group_creation = false;
+                    }
+                });
+        }
     }
 } 
