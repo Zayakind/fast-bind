@@ -3,7 +3,6 @@ use std::fs;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use clipboard::{ClipboardContext, ClipboardProvider};
 use crate::error::AppError;
 
 // Структура, представляющая группу заметок
@@ -62,13 +61,7 @@ impl NotesManager {
         Ok(())
     }
 
-    // Загружаем заметку из файла
-    pub fn load_note(&self, id: Uuid) -> Result<Note, AppError> {
-        let file_path = self.get_note_path(id);
-        let content = fs::read_to_string(file_path)?;
-        let note: Note = serde_json::from_str(&content)?;
-        Ok(note)
-    }
+
 
     // Получаем список всех заметок
     pub fn get_all_notes(&self) -> Result<Vec<Note>, AppError> {
@@ -102,7 +95,7 @@ impl NotesManager {
             fs::remove_file(file_path)?;
             Ok(())
         } else {
-            Err(AppError::Note("Заметка не найдена".into()))
+            Err(AppError::NoteNotFound)
         }
     }
 
@@ -129,47 +122,4 @@ impl NotesManager {
     }
 }
 
-// Функции для работы с заметками (публичный API)
-
-// Создание новой заметки
-pub fn create_note(title: String, content: String) -> Result<Note, AppError> {
-    let note = Note {
-        id: Uuid::new_v4(),
-        title,
-        content,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        pinned: false,
-        group_id: None,
-    };
-    Ok(note)
-}
-
-// Обновление существующей заметки
-pub fn update_note(id: Uuid, title: String, content: String) -> Result<Note, AppError> {
-    // TODO: Реализовать обновление заметки
-    unimplemented!()
-}
-
-// Удаление заметки
-pub fn delete_note(id: Uuid) -> Result<(), AppError> {
-    // TODO: Реализовать удаление заметки
-    unimplemented!()
-}
-
-// Получение списка всех заметок
-pub fn get_notes() -> Result<Vec<Note>, AppError> {
-    // TODO: Реализовать получение списка заметок
-    unimplemented!()
-}
-
-// Копирование содержимого заметки в буфер обмена
-pub fn copy_to_clipboard(content: String) -> Result<(), AppError> {
-    let mut ctx: ClipboardContext = ClipboardProvider::new()
-        .map_err(|e| AppError::Clipboard(e.to_string()))?;
-    
-    ctx.set_contents(content)
-        .map_err(|e| AppError::Clipboard(e.to_string()))?;
-    
-    Ok(())
-} 
+ 

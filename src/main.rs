@@ -1,9 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod notes;
-mod ssh;
 mod error;
-mod config;
 mod app;
 
 use eframe::egui;
@@ -29,5 +27,5 @@ fn main() -> Result<(), AppError> {
             // Создаём приложение без принудительной установки темы
             Ok(Box::new(App::new(cc)))
         })
-    ).map_err(|e| AppError::Config(format!("Failed to start application: {}", e)))
+    ).map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to start application: {}", e))))
 }

@@ -173,19 +173,7 @@ impl App {
         }
     }
 
-    /// Получает все подгруппы для указанной группы
-    fn get_subgroups(&self, parent_id: Uuid) -> Vec<&NoteGroup> {
-        self.groups.iter()
-            .filter(|g| g.parent_id == Some(parent_id))
-            .collect()
-    }
 
-    /// Получает корневые группы (без родителя)
-    fn get_root_groups(&self) -> Vec<&NoteGroup> {
-        self.groups.iter()
-            .filter(|g| g.parent_id.is_none())
-            .collect()
-    }
 
     /// Создаёт подгруппу для указанной родительской группы
     fn create_subgroup(&mut self, parent_id: Uuid, name: String) {
@@ -322,30 +310,7 @@ impl App {
             });
     }
 
-    /// Отображает боковую панель со списком заметок и групп
-    fn show_side_panel(&mut self, ctx: &egui::Context) {
-        let panel_bg_color = self.get_side_panel_bg_color(ctx);
-        let panel_shadow = self.get_panel_shadow(ctx);
-        
-        // Получаем размер экрана для вычисления динамической ширины
-        let screen_rect = ctx.screen_rect();
-        let dynamic_panel_width = screen_rect.width() * 0.30;
-        
-        egui::SidePanel::left("notes_panel")
-            .frame(egui::Frame {
-                fill: panel_bg_color,
-                stroke: egui::Stroke::NONE,
-                inner_margin: egui::Margin::same(8),
-                shadow: panel_shadow,
-                ..Default::default()
-            })
-            .resizable(false)
-            .min_width(dynamic_panel_width)
-            .max_width(dynamic_panel_width)
-            .show(ctx, |ui| {
-                self.show_notes_list(ui, ctx, dynamic_panel_width);
-            });
-    }
+
 
     /// Отображает список заметок и групп внутри боковой панели
     fn show_notes_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, panel_width: f32) {
@@ -575,77 +540,9 @@ impl App {
         });
     }
 
-    /// Отображает центральную панель с содержимым заметки или формой создания
-    fn show_central_panel(&mut self, ctx: &egui::Context) {
-        let central_bg_color = self.get_central_panel_bg_color(ctx);
-        
-        egui::CentralPanel::default()
-        .frame(egui::Frame {
-            fill: central_bg_color,
-            stroke: egui::Stroke::NONE,
-            inner_margin: egui::Margin::same(8),
-            ..Default::default()
-        })
-        .show(ctx, |ui| {
-            // Контент заметки растягивается автоматически до правого края
-            self.show_note_content_or_creation(ui);
-        });
-    }
 
-    /// Отображает кнопки действий (редактирование, копирование, удаление)
-    fn show_action_buttons(&mut self, ui: &mut egui::Ui) {
-        if let Some(idx) = self.selected_note {
-            if idx < self.notes.len() {
-                ui.vertical(|ui| {
-                    ui.add_space(8.0);
-                    
-                    // Кнопка редактирования
-                    if self.editing_content == Some(idx) {
-                        // В режиме редактирования показываем кнопки Save/Cancel
-                        if ui.add_sized([60.0, 28.0], egui::Button::new("💾")).on_hover_text("Сохранить").clicked() {
-                            self.save_note_changes();
-                            self.editing_content = None;
-                        }
-                        ui.add_space(6.0);
-                        if ui.add_sized([60.0, 28.0], egui::Button::new("❌")).on_hover_text("Отмена").clicked() {
-                            // Восстанавливаем оригинальное содержимое
-                            self.new_note_content = self.notes[idx].content.clone();
-                            self.editing_content = None;
-                        }
-                    } else {
-                        // В режиме просмотра показываем кнопку Edit
-                        if ui.add_sized([60.0, 28.0], egui::Button::new("📝")).on_hover_text("Редактировать").clicked() {
-                            self.editing_content = Some(idx);
-                            self.new_note_content = self.notes[idx].content.clone();
-                        }
-                    }
-                    
-                    ui.add_space(6.0);
-                    
-                    // Кнопка копирования
-                    if ui.add_sized([60.0, 28.0], egui::Button::new("📋")).on_hover_text("Копировать").clicked() {
-                        self.copy_note_to_clipboard();
-                    }
-                    ui.add_space(6.0);
-                    
-                    // Кнопка удаления
-                    if ui.add_sized([60.0, 28.0], egui::Button::new("🗑")).on_hover_text("Удалить").clicked() {
-                        self.delete_selected_note();
-                    }
-                    ui.add_space(6.0);
-                    
-                    // Кнопка копирования в постоянное поле
-                    if ui.add_sized([60.0, 28.0], egui::Button::new("📄")).on_hover_text("Копировать в заметки").clicked() {
-                        self.copy_note_to_persistent_text();
-                    }
-                });
-            } else {
-                ui.add_space(150.0); // чтобы не ломать layout, если заметка не выбрана
-            }
-        } else {
-            ui.add_space(150.0);
-        }
-    }
+
+
 
     /// Отображает содержимое заметки или форму создания новой заметки
     fn show_note_content_or_creation(&mut self, ui: &mut egui::Ui) {
