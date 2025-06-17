@@ -13,6 +13,10 @@ pub struct NoteGroup {
     pub name: String,
     #[serde(default)]
     pub collapsed: bool,
+    #[serde(default)]
+    pub parent_id: Option<Uuid>, // ID родительской группы для вложенности
+    #[serde(default)]
+    pub level: u32, // Уровень вложенности (0 = корневая группа)
 }
 
 // Структура, представляющая заметку
@@ -117,6 +121,11 @@ impl NotesManager {
         let content = fs::read_to_string(file_path)?;
         let groups: Vec<NoteGroup> = serde_json::from_str(&content)?;
         Ok(groups)
+    }
+
+    /// Получает путь к директории для дополнительных файлов (родительская директория notes)
+    pub fn get_base_dir(&self) -> &std::path::Path {
+        self.notes_dir.parent().unwrap_or(&self.notes_dir)
     }
 }
 

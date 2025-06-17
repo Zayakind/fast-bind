@@ -26,15 +26,7 @@ fn main() -> Result<(), AppError> {
         "Notes",
         options,
         Box::new(|cc| {
-            // Настройка стиля приложения
-            let mut style = (*cc.egui_ctx.style()).clone();
-            style.visuals.widgets.noninteractive.corner_radius = 5.0.into();
-            style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(40, 40, 40);
-            style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(60, 60, 60);
-            style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(80, 80, 80);
-            style.visuals.widgets.active.bg_fill = egui::Color32::from_rgb(100, 100, 100);
-            cc.egui_ctx.set_style(style);
-            
+            // Создаём приложение без принудительной установки темы
             Ok(Box::new(App::new(cc)))
         })
     ).map_err(|e| AppError::Config(format!("Failed to start application: {}", e)))
