@@ -18,7 +18,6 @@ pub struct App {
     new_note_title: String,
     new_note_content: String,
     notes_manager: NotesManager,
-    right_panel_width: f32, // ширина правой панели
     editing_title: Option<usize>, // индекс редактируемого заголовка
     editing_content: Option<usize>, // индекс редактируемого содержимого
     new_group_name: String, // для создания группы
@@ -56,8 +55,6 @@ impl App {
         // Загружаем постоянный текст
         let persistent_text = Self::load_persistent_text(&notes_manager).unwrap_or_default();
         
-        let default_window_width = 1024.0;
-        let left_panel_width = (default_window_width * 0.20) as f32;
         Self {
             notes,
             groups,
@@ -65,7 +62,6 @@ impl App {
             new_note_title: String::new(),
             new_note_content: String::new(),
             notes_manager,
-            right_panel_width: left_panel_width,
             editing_title: None,
             editing_content: None,
             new_group_name: String::new(),
@@ -307,26 +303,8 @@ impl App {
         let panel_bg_color = self.get_side_panel_bg_color(ctx);
         let panel_shadow = self.get_panel_shadow(ctx);
         
-        egui::SidePanel::left("notes_panel")
-            .frame(egui::Frame {
-                fill: panel_bg_color,
-                stroke: egui::Stroke::NONE,
-                inner_margin: egui::Margin::same(8),
-                shadow: panel_shadow,
-                ..Default::default()
-            })
-            .resizable(false)
-            .min_width(self.right_panel_width)
-            .max_width(self.right_panel_width)
-            .show_inside(ui, |ui| {
-                self.show_notes_list(ui, ctx);
-            });
-    }
-
-    /// Отображает боковую панель со списком заметок и групп
-    fn show_side_panel(&mut self, ctx: &egui::Context) {
-        let panel_bg_color = self.get_side_panel_bg_color(ctx);
-        let panel_shadow = self.get_panel_shadow(ctx);
+        // Вычисляем динамическую ширину панели - 30% от доступной ширины
+        let dynamic_panel_width = ui.available_width() * 0.30;
         
         egui::SidePanel::left("notes_panel")
             .frame(egui::Frame {
@@ -337,15 +315,40 @@ impl App {
                 ..Default::default()
             })
             .resizable(false)
-            .min_width(self.right_panel_width)
-            .max_width(self.right_panel_width)
+            .min_width(dynamic_panel_width)
+            .max_width(dynamic_panel_width)
+            .show_inside(ui, |ui| {
+                self.show_notes_list(ui, ctx, dynamic_panel_width);
+            });
+    }
+
+    /// Отображает боковую панель со списком заметок и групп
+    fn show_side_panel(&mut self, ctx: &egui::Context) {
+        let panel_bg_color = self.get_side_panel_bg_color(ctx);
+        let panel_shadow = self.get_panel_shadow(ctx);
+        
+        // Получаем размер экрана для вычисления динамической ширины
+        let screen_rect = ctx.screen_rect();
+        let dynamic_panel_width = screen_rect.width() * 0.30;
+        
+        egui::SidePanel::left("notes_panel")
+            .frame(egui::Frame {
+                fill: panel_bg_color,
+                stroke: egui::Stroke::NONE,
+                inner_margin: egui::Margin::same(8),
+                shadow: panel_shadow,
+                ..Default::default()
+            })
+            .resizable(false)
+            .min_width(dynamic_panel_width)
+            .max_width(dynamic_panel_width)
             .show(ctx, |ui| {
-                self.show_notes_list(ui, ctx);
+                self.show_notes_list(ui, ctx, dynamic_panel_width);
             });
     }
 
     /// Отображает список заметок и групп внутри боковой панели
-    fn show_notes_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn show_notes_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, panel_width: f32) {
         let panel_bg_color = self.get_side_panel_bg_color(ctx);
         
         egui::ScrollArea::vertical()
@@ -402,14 +405,14 @@ impl App {
                 ui.add_space(10.0);
                 
                 // Кнопки управления
-                if ui.add_sized([self.right_panel_width - 12.0, 32.0], egui::Button::new("+ Новая заметка")).clicked() {
+                if ui.add_sized([panel_width - 12.0, 32.0], egui::Button::new("+ Новая заметка")).clicked() {
                     self.selected_note = None;
                     self.new_note_title.clear();
                     self.new_note_content.clear();
                     self.new_note_group_id = None;
                 }
                 ui.add_space(6.0);
-                if ui.add_sized([self.right_panel_width - 12.0, 32.0], egui::Button::new("Создать группу")).clicked() {
+                if ui.add_sized([panel_width - 12.0, 32.0], egui::Button::new("Создать группу")).clicked() {
                     self.show_group_creation = true;
                     self.new_group_name.clear();
                     self.group_creation_selected_notes.clear();
@@ -417,12 +420,12 @@ impl App {
                 ui.add_space(10.0);
 
                 // Отображение групп и заметок
-                self.show_groups_and_notes(ui, ctx);
+                self.show_groups_and_notes(ui, ctx, panel_width);
             });
     }
 
     /// Отображает группы с заметками и заметки без группы
-    fn show_groups_and_notes(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn show_groups_and_notes(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, panel_width: f32) {
         // --- Показываем корневые группы ---
         let mut toggled_group: Option<Uuid> = None;
         let root_groups: Vec<(Uuid, String, bool)> = self.groups.iter()
@@ -431,7 +434,7 @@ impl App {
             .collect();
         
         for (group_id, group_name, collapsed) in root_groups {
-            if let Some(toggle_id) = self.show_group_with_hierarchy(ui, ctx, group_id, &group_name, collapsed, 0) {
+            if let Some(toggle_id) = self.show_group_with_hierarchy(ui, ctx, group_id, &group_name, collapsed, 0, panel_width) {
                 toggled_group = Some(toggle_id);
             }
         }
@@ -441,11 +444,11 @@ impl App {
         }
 
         // --- Заметки без группы ---
-        self.show_ungrouped_notes(ui, ctx);
+        self.show_ungrouped_notes(ui, ctx, panel_width);
     }
 
     /// Отображает группу и её подгруппы
-    fn show_group_with_hierarchy(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, group_id: Uuid, group_name: &str, collapsed: bool, depth: usize) -> Option<Uuid> {
+    fn show_group_with_hierarchy(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, group_id: Uuid, group_name: &str, collapsed: bool, depth: usize, panel_width: f32) -> Option<Uuid> {
         let mut toggled_group: Option<Uuid> = None;
         
         // Отступ для вложенности
@@ -467,7 +470,7 @@ impl App {
             .default_open(!collapsed)
             .show(ui, |ui| {
                 // Показываем заметки в этой группе
-                self.show_notes_in_group(ui, ctx, note_indices);
+                self.show_notes_in_group(ui, ctx, note_indices, panel_width);
                 
                 // Показываем подгруппы
                 let subgroups: Vec<(Uuid, String, bool)> = self.groups.iter()
@@ -476,7 +479,7 @@ impl App {
                     .collect();
                 
                 for (sub_id, sub_name, sub_collapsed) in subgroups {
-                    if let Some(sub_toggle) = self.show_group_with_hierarchy(ui, ctx, sub_id, &sub_name, sub_collapsed, depth + 1) {
+                    if let Some(sub_toggle) = self.show_group_with_hierarchy(ui, ctx, sub_id, &sub_name, sub_collapsed, depth + 1, panel_width) {
                         toggled_group = Some(sub_toggle);
                     }
                 }
@@ -490,7 +493,7 @@ impl App {
     }
 
     /// Отображает заметки внутри группы
-    fn show_notes_in_group(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, note_indices: Vec<usize>) {
+    fn show_notes_in_group(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, note_indices: Vec<usize>, panel_width: f32) {
         let note_color = self.get_note_text_color(ctx);
         
         for idx in note_indices {
@@ -506,7 +509,7 @@ impl App {
                 egui::RichText::new(title).color(note_color)
             );
             
-            if ui.add_sized([self.right_panel_width - 20.0, 28.0], label).clicked() {
+            if ui.add_sized([panel_width - 20.0, 28.0], label).clicked() {
                 self.selected_note = Some(idx);
                 self.new_note_title = note.title.clone();
                 self.new_note_content = note.content.clone();
@@ -516,7 +519,7 @@ impl App {
     }
 
     /// Отображает заметки без группы
-    fn show_ungrouped_notes(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn show_ungrouped_notes(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, panel_width: f32) {
         let no_group_notes: Vec<_> = self.notes.iter().enumerate()
             .filter(|(_, n)| n.group_id.is_none())
             .collect();
@@ -544,7 +547,7 @@ impl App {
                             egui::RichText::new(title).color(note_color)
                         );
                         
-                        if ui.add_sized([self.right_panel_width - 20.0, 28.0], label).clicked() {
+                        if ui.add_sized([panel_width - 20.0, 28.0], label).clicked() {
                             self.selected_note = Some(idx);
                             self.new_note_title = note.title.clone();
                             self.new_note_content = note.content.clone();
@@ -567,18 +570,8 @@ impl App {
             ..Default::default()
         })
         .show_inside(ui, |ui| {
-            let splitter_width = 6.0;
-            let available_width = ui.available_width();
-            let left_width = self.right_panel_width;
-            let right_width = available_width - left_width - splitter_width - 75.0; // 75px под колонку кнопок
-
-            ui.horizontal(|ui| {
-                // Левая панель (заметка или создание)
-                self.show_note_content_or_creation(ui, right_width);
-                
-                // Колонка с кнопками справа
-                self.show_action_buttons(ui);
-            });
+            // Контент заметки растягивается автоматически до правого края
+            self.show_note_content_or_creation(ui);
         });
     }
 
@@ -594,18 +587,8 @@ impl App {
             ..Default::default()
         })
         .show(ctx, |ui| {
-            let splitter_width = 6.0;
-            let available_width = ui.available_width();
-            let left_width = self.right_panel_width;
-            let right_width = available_width - left_width - splitter_width - 75.0; // 75px под колонку кнопок
-
-            ui.horizontal(|ui| {
-                // Левая панель (заметка или создание)
-                self.show_note_content_or_creation(ui, right_width);
-                
-                // Колонка с кнопками справа
-                self.show_action_buttons(ui);
-            });
+            // Контент заметки растягивается автоматически до правого края
+            self.show_note_content_or_creation(ui);
         });
     }
 
@@ -665,9 +648,9 @@ impl App {
     }
 
     /// Отображает содержимое заметки или форму создания новой заметки
-    fn show_note_content_or_creation(&mut self, ui: &mut egui::Ui, width: f32) {
+    fn show_note_content_or_creation(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            ui.set_width(width.max(220.0));
+            // Убираем принудительное ограничение ширины - позволяем растягиваться до края
             
             if let Some(idx) = self.selected_note {
                 if idx < self.notes.len() {
@@ -731,6 +714,11 @@ impl App {
         
         // ComboBox для выбора группы
         self.show_group_selector(ui, idx);
+        
+        ui.add_space(8.0);
+        
+        // Кнопки действий для заметки
+        self.show_note_action_buttons(ui, idx);
     }
 
     /// Отображает редактор заголовка заметки
@@ -892,6 +880,50 @@ impl App {
             
             if let Some(gid) = new_group_id {
                 self.set_note_group(idx, gid);
+            }
+        });
+    }
+
+    /// Отображает кнопки действий для заметки (встроенные в область заметки)
+    fn show_note_action_buttons(&mut self, ui: &mut egui::Ui, idx: usize) {
+        ui.horizontal(|ui| {
+            if self.editing_content == Some(idx) {
+                // В режиме редактирования показываем кнопки Save/Cancel
+                if ui.add_sized([80.0, 32.0], egui::Button::new("💾 Сохранить")).clicked() {
+                    self.save_note_changes();
+                    self.editing_content = None;
+                }
+                ui.add_space(8.0);
+                if ui.add_sized([80.0, 32.0], egui::Button::new("❌ Отмена")).clicked() {
+                    // Восстанавливаем оригинальное содержимое
+                    self.new_note_content = self.notes[idx].content.clone();
+                    self.editing_content = None;
+                }
+            } else {
+                // В режиме просмотра показываем кнопки в нужном порядке:
+                // 1. Копирование (первая - самая частая операция)
+                if ui.add_sized([90.0, 32.0], egui::Button::new("📋 Копировать")).clicked() {
+                    self.copy_note_to_clipboard();
+                }
+                ui.add_space(8.0);
+                
+                // 2. Копирование в постоянное поле (вторая по важности)
+                if ui.add_sized([110.0, 32.0], egui::Button::new("📄 В заметки")).clicked() {
+                    self.copy_note_to_persistent_text();
+                }
+                ui.add_space(8.0);
+                
+                // 3. Редактирование (третья)
+                if ui.add_sized([110.0, 32.0], egui::Button::new("📝 Редактировать")).clicked() {
+                    self.editing_content = Some(idx);
+                    self.new_note_content = self.notes[idx].content.clone();
+                }
+                ui.add_space(8.0);
+                
+                // 4. Удаление (последняя - самая опасная операция)
+                if ui.add_sized([80.0, 32.0], egui::Button::new("🗑 Удалить")).clicked() {
+                    self.delete_selected_note();
+                }
             }
         });
     }
