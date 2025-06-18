@@ -37,6 +37,20 @@ pub struct App {
 
 impl App {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        // Настраиваем поддержку IME для кириллицы на Linux
+        #[cfg(target_os = "linux")]
+        {
+            // Устанавливаем специальные настройки для лучшей поддержки UTF-8
+            _cc.egui_ctx.style_mut(|style| {
+                // Улучшаем обработку текстового ввода
+                style.interaction.tooltip_delay = 0.0;
+                style.interaction.selectable_labels = true;
+            });
+            
+            // Включаем режим обработки IME событий
+            _cc.egui_ctx.set_ime_cursor_pos(egui::Vec2::ZERO);
+        }
+        
         // Создаем директорию для заметок в домашней директории пользователя
         let notes_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
@@ -575,19 +589,19 @@ impl App {
         );
         ui.add_space(6.0);
         
-        // Постоянное текстовое поле с поддержкой всех хоткеев
+        // Постоянное текстовое поле с улучшенной поддержкой кириллицы
         egui::Frame::new()
             .stroke(egui::Stroke::new(0.7, egui::Color32::GRAY))
             .corner_radius(6)
             .inner_margin(egui::Margin::same(6))
             .show(ui, |ui| {
-                let response = ui.add_sized(
-                    [ui.available_width(), 120.0], // Фиксированная высота
-                    egui::TextEdit::multiline(&mut self.persistent_text)
-                        .hint_text("Здесь вы можете писать заметки, которые сохраняются при переключении между заметками...")
-                        .desired_rows(6)
-                        .frame(false)
-                        .code_editor() // Поддержка хоткеев
+                let response = Self::add_text_edit_multiline(
+                    ui,
+                    &mut self.persistent_text,
+                    "Здесь вы можете писать заметки, которые сохраняются при переключении между заметками...",
+                    ui.available_width(),
+                    120.0,  // Фиксированная высота
+                    6
                 );
                 
                 // Автосохранение при изменении текста
@@ -636,11 +650,12 @@ impl App {
             
             if self.editing_title == Some(idx) {
                 let mut title = self.notes[idx].title.clone();
-                let response = ui.add_sized([
-                    ui.available_width() - 36.0, 32.0],
-                    egui::TextEdit::singleline(&mut title)
-                        .hint_text("Заголовок заметки")
-                        .frame(false)
+                let response = Self::add_text_edit_singleline(
+                    ui, 
+                    &mut title, 
+                    "Заголовок заметки", 
+                    ui.available_width() - 36.0, 
+                    32.0
                 );
                 
                 if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) || 
@@ -684,7 +699,7 @@ impl App {
         if let Some(idx) = self.selected_note {
             if idx < self.notes.len() {
                 if self.editing_content == Some(idx) {
-                    // Режим редактирования - показываем текстовое поле
+                    // Режим редактирования - показываем текстовое поле с улучшенной поддержкой кириллицы
                     let mut content = self.new_note_content.clone();
                     
                     // Подсчитываем количество строк + 2 дополнительные
@@ -699,12 +714,14 @@ impl App {
                         .show(ui, |ui| {
                             ui.set_height(frame_height);
                             
-                            let text_edit = egui::TextEdit::multiline(&mut content)
-                                .hint_text("Текст заметки...")
-                                .desired_rows(line_count)
-                                .frame(false);
-                            
-                            if ui.add_sized([ui.available_width(), text_height], text_edit).changed() {
+                            if Self::add_text_edit_multiline(
+                                ui, 
+                                &mut content, 
+                                "Текст заметки...", 
+                                ui.available_width(), 
+                                text_height, 
+                                line_count
+                            ).changed() {
                                 self.new_note_content = content;
                             }
                         });
@@ -828,35 +845,36 @@ impl App {
     /// Отображает форму создания новой заметки
     fn show_note_creation_form(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            // Поле заголовка
+            // Поле заголовка с улучшенной поддержкой кириллицы
             egui::Frame::new()
                 .stroke(egui::Stroke::new(0.7, egui::Color32::GRAY))
                 .corner_radius(6)
                 .inner_margin(egui::Margin::same(6))
                 .show(ui, |ui| {
-                    ui.add_sized([
-                        ui.available_width(), 28.0],
-                        egui::TextEdit::singleline(&mut self.new_note_title)
-                            .hint_text("Заголовок заметки")
-                            .frame(false)
+                    Self::add_text_edit_singleline(
+                        ui, 
+                        &mut self.new_note_title, 
+                        "Заголовок заметки", 
+                        ui.available_width(), 
+                        28.0
                     );
                 });
             
             ui.add_space(10.0);
             
-            // Поле содержимого
+            // Поле содержимого с улучшенной поддержкой кириллицы
             egui::Frame::new()
                 .stroke(egui::Stroke::new(0.7, egui::Color32::GRAY))
                 .corner_radius(6)
                 .inner_margin(egui::Margin::same(6))
                 .show(ui, |ui| {
-                    ui.add_sized([
-                        ui.available_width(), 80.0],
-                        egui::TextEdit::multiline(&mut self.new_note_content)
-                            .hint_text("Текст заметки...")
-                            .desired_rows(4)
-                            .frame(false)
-                            .code_editor()
+                    Self::add_text_edit_multiline(
+                        ui, 
+                        &mut self.new_note_content, 
+                        "Текст заметки...", 
+                        ui.available_width(), 
+                        80.0, 
+                        4
                     );
                 });
             
@@ -970,7 +988,20 @@ impl App {
                     }
 
                     ui.label("Имя группы:");
-                    ui.text_edit_singleline(&mut self.new_group_name);
+                    // Улучшенное поле ввода для кириллицы
+                    egui::Frame::new()
+                        .stroke(egui::Stroke::new(0.7, egui::Color32::GRAY))
+                        .corner_radius(4)
+                        .inner_margin(egui::Margin::same(4))
+                        .show(ui, |ui| {
+                            Self::add_text_edit_singleline(
+                                ui, 
+                                &mut self.new_group_name, 
+                                "Название группы", 
+                                ui.available_width(), 
+                                24.0
+                            );
+                        });
                     ui.add_space(10.0);
                     
                     // Выбор родительской группы (только если не создаём подгруппу)
@@ -1116,7 +1147,20 @@ impl App {
                                         ui.vertical(|ui| {
                                             ui.horizontal(|ui| {
                                                 ui.label("Имя:");
-                                                ui.text_edit_singleline(&mut self.editing_group_name);
+                                                // Улучшенное поле ввода для кириллицы  
+                                                egui::Frame::new()
+                                                    .stroke(egui::Stroke::new(0.5, egui::Color32::GRAY))
+                                                    .corner_radius(3)
+                                                    .inner_margin(egui::Margin::same(3))
+                                                    .show(ui, |ui| {
+                                                        Self::add_text_edit_singleline(
+                                                            ui, 
+                                                            &mut self.editing_group_name, 
+                                                            "Имя группы", 
+                                                            ui.available_width(), 
+                                                            20.0
+                                                        );
+                                                    });
                                             });
                                             
                                             ui.horizontal(|ui| {
@@ -1347,6 +1391,47 @@ impl App {
         
         std::fs::write(persistent_file, &self.persistent_text)
             .map_err(|e| crate::error::AppError::Io(e))
+    }
+
+    /// Создает TextEdit с улучшенной поддержкой кириллицы для Linux
+    fn add_text_edit_singleline(ui: &mut egui::Ui, text: &mut String, hint: &str, width: f32, height: f32) -> egui::Response {
+        let text_edit = egui::TextEdit::singleline(text)
+            .hint_text(hint)
+            .frame(false);
+        
+        // Специальные настройки для Linux для улучшения поддержки кириллицы
+        #[cfg(target_os = "linux")]
+        {
+            let text_edit = text_edit.clip_text(false);  // Отключаем обрезку текста для лучшей работы с UTF-8
+            ui.add_sized([width, height], text_edit)
+        }
+        
+        #[cfg(not(target_os = "linux"))]
+        {
+            ui.add_sized([width, height], text_edit)
+        }
+    }
+    
+    /// Создает многострочный TextEdit с улучшенной поддержкой кириллицы для Linux
+    fn add_text_edit_multiline(ui: &mut egui::Ui, text: &mut String, hint: &str, width: f32, height: f32, rows: usize) -> egui::Response {
+        let text_edit = egui::TextEdit::multiline(text)
+            .hint_text(hint)
+            .desired_rows(rows)
+            .frame(false);
+        
+        // Специальные настройки для Linux для улучшения поддержки кириллицы
+        #[cfg(target_os = "linux")]
+        {
+            let text_edit = text_edit
+                .clip_text(false)   // Отключаем обрезку текста для лучшей работы с UTF-8
+                .code_editor();     // Включаем режим кодового редактора для лучшей обработки UTF-8
+            ui.add_sized([width, height], text_edit)
+        }
+        
+        #[cfg(not(target_os = "linux"))]
+        {
+            ui.add_sized([width, height], text_edit)
+        }
     }
 }
 

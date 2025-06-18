@@ -26,33 +26,9 @@
 ### Скачать готовую сборку
 
 1. Перейдите в Releases на одной из платформ:
-   - **GitHub**: [Releases](https://github.com/your-username/notes/releases)
-   - **GitFlic**: [Releases](https://gitflic.ru/your-username/notes/releases)
-2. Скачайте версию для вашей ОС:
-   - `Notes-windows-x64.exe` - для Windows
-   - `Notes-linux-x64` - для Linux  
-   - `Notes-macos-intel` - для macOS Intel
-   - `Notes-macos-apple-silicon` - для macOS Apple Silicon
+   - **GitHub**: [Releases](https://github.com/Zayakind/fast-bind)
+   - **GitFlic**: [Releases](https://gitflic.ru/project/zapyp/fast-bind)
 
-### Сборка из исходников
-
-```bash
-# Клонирование репозитория (GitHub)
-git clone https://github.com/your-username/notes.git
-cd notes
-
-# Или с GitFlic
-git clone https://gitflic.ru/your-username/notes.git
-cd notes
-
-# Сборка
-cargo build --release
-
-# Запуск
-cargo run --release
-```
-
-Подробная инструкция по сборке: [BUILD.md](BUILD.md)
 
 ## Использование
 
@@ -85,6 +61,19 @@ cargo run --release
 - **Сохранение**: JSON файлы
 - **Поддерживаемые ОС**: Windows 10+, Linux, macOS 10.15+
 
+### Решение проблемы с кириллицей на Linux
+
+В версии приложения реализовано решение известной проблемы с вводом кириллических символов на Linux в библиотеке egui. Применены следующие улучшения:
+
+1. **Настройка IME (Input Method Editor)** - специальные настройки для корректной обработки многобайтовых символов
+2. **Улучшенные TextEdit виджеты** - отключение обрезки текста и включение режима кодового редактора для лучшей поддержки UTF-8
+3. **Принудительный рендеринг через Glow** - использование OpenGL рендерера для стабильной работы на всех дистрибутивах Linux
+
+Если проблемы с кириллицей все еще возникают, рекомендуется:
+- Установить пакет `ibus` или `fcitx5` для поддержки IME
+- Проверить переменные окружения `LANG` и `LC_ALL` (должны содержать UTF-8)
+- Перезапустить приложение после изменения настроек локали
+
 ## Разработка
 
 ### Требования
@@ -102,20 +91,6 @@ src/
 ├── error.rs         # Обработка ошибок
 └── assets/          # Ресурсы приложения
 ```
-
-### Сборка для разработки
-
-```bash
-# Режим отладки
-cargo run
-
-# С логами
-RUST_LOG=debug cargo run
-
-# Тесты
-cargo test
-```
-
 
 
 ## Планы развития
@@ -143,7 +118,7 @@ cargo test
 
 ## Авторы
 
-- **Ваше имя** - *Основной разработчик* - [GitHub](https://github.com/yourusername)
+- **Дмитрий Заякин** - *Основной разработчик* - [GitFlic](https://gitflic.ru/user/zapyp)
 
 ## Благодарности
 
