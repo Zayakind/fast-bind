@@ -17,6 +17,9 @@ fn main() -> Result<(), AppError> {
             .with_resizable(true)
             .with_decorations(true)
             .with_transparent(false),
+        // Включаем поддержку IME для решения проблемы с кириллицей на Linux
+        // Это помогает с обработкой UTF-8 символов в TextEdit виджетах
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
     
@@ -24,6 +27,16 @@ fn main() -> Result<(), AppError> {
         "Notes",
         options,
         Box::new(|cc| {
+            // Настраиваем поддержку IME для решения проблемы с кириллицей
+            #[cfg(target_os = "linux")]
+            {
+                // Включаем обработку UTF-8 событий клавиатуры
+                cc.egui_ctx.input_mut(|i| {
+                    // Принудительно включаем обработку text events
+                    i.wants_raw_input = true;
+                });
+            }
+            
             // Создаём приложение без принудительной установки темы
             Ok(Box::new(App::new(cc)))
         })
