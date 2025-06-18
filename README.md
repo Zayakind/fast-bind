@@ -25,18 +25,24 @@
 
 ### Скачать готовую сборку
 
-1. Перейдите в [Releases](https://github.com/your-repo/releases)
+1. Перейдите в Releases на одной из платформ:
+   - **GitHub**: [Releases](https://github.com/your-username/notes/releases)
+   - **GitFlic**: [Releases](https://gitflic.ru/your-username/notes/releases)
 2. Скачайте версию для вашей ОС:
    - `Notes-windows-x64.exe` - для Windows
    - `Notes-linux-x64` - для Linux  
-   - `Notes-macos-x64` - для macOS Intel
-   - `Notes-macos-arm64` - для macOS Apple Silicon
+   - `Notes-macos-intel` - для macOS Intel
+   - `Notes-macos-apple-silicon` - для macOS Apple Silicon
 
 ### Сборка из исходников
 
 ```bash
-# Клонирование репозитория
-git clone https://github.com/your-repo/notes.git
+# Клонирование репозитория (GitHub)
+git clone https://github.com/your-username/notes.git
+cd notes
+
+# Или с GitFlic
+git clone https://gitflic.ru/your-username/notes.git
 cd notes
 
 # Сборка
@@ -93,9 +99,8 @@ src/
 ├── main.rs          # Точка входа
 ├── app.rs           # Основная логика приложения
 ├── notes.rs         # Работа с заметками
-├── config.rs        # Конфигурация
 ├── error.rs         # Обработка ошибок
-└── ssh.rs           # SSH (в разработке)
+└── assets/          # Ресурсы приложения
 ```
 
 ### Сборка для разработки
@@ -110,6 +115,8 @@ RUST_LOG=debug cargo run
 # Тесты
 cargo test
 ```
+
+
 
 ## Планы развития
 

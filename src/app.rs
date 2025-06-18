@@ -40,8 +40,8 @@ impl App {
         // Создаем директорию для заметок в домашней директории пользователя
         let notes_dir = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join(".notes")
-            .join("notes");
+            .join(".fast-bind")
+            .join("data");
         
         let notes_manager = NotesManager::new(notes_dir);
         
