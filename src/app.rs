@@ -782,14 +782,43 @@ impl App {
                         .unwrap_or("Без группы")
                 )
                 .show_ui(ui, |ui| {
-                    if ui.selectable_label(self.notes[idx].group_id.is_none(), "Без группы").clicked() {
+                    // Ограничиваем высоту с помощью ScrollArea
+                    egui::ScrollArea::vertical()
+                        .max_height(400.0)
+                        .show(ui, |ui| {
+                    // Опция "Без группы" с компактным отображением
+                    if ui.add_sized([ui.available_width(), 24.0], 
+                        egui::SelectableLabel::new(self.notes[idx].group_id.is_none(), "Без группы")
+                    ).clicked() {
                         new_group_id = Some(None);
                     }
-                    for group in &self.groups {
-                        if ui.selectable_label(self.notes[idx].group_id == Some(group.id), &group.name).clicked() {
+                    
+                    // Ограничиваем количество отображаемых групп до 20
+                    let groups_to_show: Vec<_> = self.groups.iter().take(20).collect();
+                    
+                    // Отображаем группы с компактным размером
+                    for group in groups_to_show {
+                        let is_selected = self.notes[idx].group_id == Some(group.id);
+                        // Добавляем отступ для подгрупп для лучшей визуализации
+                        let group_text = if group.level > 0 {
+                            format!("{}{}", "  ".repeat(group.level as usize), group.name)
+                        } else {
+                            group.name.clone()
+                        };
+                        
+                        if ui.add_sized([ui.available_width(), 24.0], 
+                            egui::SelectableLabel::new(is_selected, group_text)
+                        ).clicked() {
                             new_group_id = Some(Some(group.id));
                         }
                     }
+                    
+                    // Показываем сообщение, если групп больше 20
+                    if self.groups.len() > 20 {
+                        ui.separator();
+                        ui.label(format!("Показано 20 из {} групп", self.groups.len()));
+                    }
+                        });
                 });
             
             if let Some(gid) = new_group_id {
@@ -906,14 +935,44 @@ impl App {
                         .unwrap_or("Без группы")
                 )
                 .show_ui(ui, |ui| {
-                    if ui.selectable_label(self.new_note_group_id.is_none(), "Без группы").clicked() {
-                        new_group_id = Some(None);
-                    }
-                    for group in &self.groups {
-                        if ui.selectable_label(self.new_note_group_id == Some(group.id), &group.name).clicked() {
-                            new_group_id = Some(Some(group.id));
-                        }
-                    }
+                    // Ограничиваем высоту с помощью ScrollArea
+                    egui::ScrollArea::vertical()
+                        .max_height(400.0)
+                        .show(ui, |ui| {
+                            // Опция "Без группы" с компактным отображением
+                            if ui.add_sized([ui.available_width(), 24.0], 
+                                egui::SelectableLabel::new(self.new_note_group_id.is_none(), "Без группы")
+                            ).clicked() {
+                                new_group_id = Some(None);
+                            }
+                            
+                            // Ограничиваем количество отображаемых групп до 20
+                            let groups_to_show: Vec<_> = self.groups.iter().take(20).collect();
+                            
+                            // Отображаем группы с компактным размером
+                            for group in groups_to_show {
+                                let is_selected = self.new_note_group_id == Some(group.id);
+                                // Добавляем отступ для подгрупп для лучшей визуализации
+                                let group_text = if group.level > 0 {
+                                    format!("{}{}", "  ".repeat(group.level as usize), group.name)
+                                } else {
+                                    group.name.clone()
+                                };
+                                
+                                if ui.add_sized([ui.available_width(), 24.0], 
+                                    egui::SelectableLabel::new(is_selected, group_text)
+                                ).clicked() {
+                                    new_group_id = Some(Some(group.id));
+                                }
+                            }
+                            
+                            // Показываем сообщение, если групп больше 20
+                            if self.groups.len() > 20 {
+                                ui.separator();
+                                ui.label(format!("Показано 20 из {} групп", self.groups.len()));
+                                ui.label("Используйте редактор групп для управления большим количеством групп");
+                            }
+                        });
                 });
             
             if let Some(gid) = new_group_id {

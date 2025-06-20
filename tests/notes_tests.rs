@@ -1,4 +1,4 @@
-use mimir::notes::{Note, NotesManager};
+use fast_bind::notes::{Note, NotesManager};
 use std::path::PathBuf;
 use std::fs;
 use tempfile::TempDir;
