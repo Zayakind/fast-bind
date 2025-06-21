@@ -3,12 +3,24 @@
 mod notes;
 mod error;
 mod app;
+mod state;
+mod ui;
+mod logging;
+mod validation;
+mod performance;
 
 use eframe::egui;
 use app::App;
 use error::AppError;
 
 fn main() -> Result<(), AppError> {
+    // Инициализируем систему логирования
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Info)
+        .format_timestamp_secs()
+        .init();
+    
+    log::info!("Запуск приложения fast-bind");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
