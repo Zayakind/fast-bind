@@ -29,6 +29,15 @@
    - **GitHub**: [Releases](https://github.com/Zayakind/fast-bind)
    - **GitFlic**: [Releases](https://gitflic.ru/project/zapyp/fast-bind)
 
+### ⚠️ Важно: Проблемы с антивирусами
+
+Антивирусные программы могут ошибочно считать приложение подозрительным. Это распространенная проблема для приложений на Rust.
+
+**Если антивирус удалил файл:**
+- Добавьте `fast-bind.exe` в исключения антивируса
+- Подробные инструкции см. в [ANTIVIRUS_INFO.md](ANTIVIRUS_INFO.md)
+- Можно собрать версию с консольным окном: `cargo build --release --features console`
+
 
 ## Использование
 
