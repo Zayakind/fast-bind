@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(all(not(debug_assertions), not(feature = "console")), windows_subsystem = "windows")]
 
 mod notes;
 mod error;

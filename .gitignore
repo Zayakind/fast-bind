@@ -5,6 +5,9 @@ Cargo.lock
 # IDE
 .idea/
 .vscode/
+
+# Releases
+releases/
 *.swp
 *.swo
 *~

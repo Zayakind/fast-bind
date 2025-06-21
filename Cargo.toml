@@ -1,20 +1,22 @@
 [package]
 name = "fast-bind"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
+
+# Дополнительные возможности для сборки
+[features]
+default = []
+console = []  # Включает консольное окно даже в release-сборке (для отладки и снижения подозрительности)
 
 [dependencies]
 eframe = "0.31.1"  # egui framework
 egui = "0.31.1"    # GUI library
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.0", features = ["full"] }
 clipboard = "0.5"
-anyhow = "1.0"
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
-rfd = "0.12"       # для диалоговых окон
 dirs = "5.0"       # для работы с домашней директорией
 log = "0.4"        # система логирования
 env_logger = "0.10" # реализация логирования
@@ -22,15 +24,19 @@ env_logger = "0.10" # реализация логирования
 [dev-dependencies]
 tempfile = "3.8"   # для создания временных директорий в тестах
 
+# Build dependencies для компиляции ресурсов Windows
+[build-dependencies]
+winres = "0.1"     # Для встраивания версионной информации и иконки в Windows
+
 # Оптимизации для release сборки
 [profile.release]
-lto = true          # Link Time Optimization - уменьшает размер бинарника
-strip = true        # Удаляет отладочную информацию
+lto = "thin"        # Более мягкая LTO оптимизация вместо полной
+# strip = true      # Закомментируем для сохранения отладочной информации
 panic = "abort"     # Прерывать программу при панике вместо раскручивания стека
 codegen-units = 1   # Улучшает оптимизацию за счет времени компиляции
 opt-level = 3       # Максимальная оптимизация
 
-# Дополнительные оптимизации размера для Linux
+# Дополнительные оптимизации размера
 [profile.release.package."*"]
 opt-level = 3
-debug = false
+debug = true        # Оставляем отладочную информацию
